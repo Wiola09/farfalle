@@ -1,52 +1,15 @@
-# Use a specific version of node:18-alpine to ensure reproducibility
-FROM node:18-alpine as builder
+FROM node:18-alpine
 
-# Combine RUN commands to reduce the number of layers, and clean up to minimize the image size
-RUN apk add --no-cache libc6-compat && \
-    corepack enable
+RUN apk add --no-cache libc6-compat
 
-WORKDIR /app
+WORKDIR /app/src/frontend
 
-# We only copy the package.json and pnpm-lock.yaml or package-lock.json first to leverage Docker cache
-COPY src/frontend/package.json src/frontend/pnpm-lock.yaml ./
+COPY src/frontend /app
 
-# Install dependencies
-RUN pnpm i --frozen-lockfile
-
-# Copy the rest of the code
-COPY src/frontend .
-
-ENV NEXT_PUBLIC_API_URL=farfalle_frontend:8000
-# Build the application
-RUN pnpm run build
-
-# Multi-stage build: Create a new stage with a fresh copy of node:18-alpine
-FROM node:18-alpine as runner
-
-WORKDIR /app
-
-# We only copy the needed files from the builder stage
-COPY --from=builder /app/.next ./.next
-COPY --from=builder /app/public ./public
-COPY --from=builder /app/package.json ./package.json
-COPY --from=builder /app/pnpm-lock.yaml ./pnpm-lock.yaml
-
-
-# Install `pnpm`
 RUN corepack enable
+RUN pnpm i
 
-# Install production dependencies only
-RUN pnpm i --prod --frozen-lockfile
 
-# It is good to specify a non-root user to run your container
-RUN addgroup -S appgroup && adduser -S appuser -G appgroup
-USER appuser
-
-# Set environment to production mode
-ENV NODE_ENV=production
-
-# Expose the port your app runs on
 EXPOSE 3000
 
-# Use the CMD directive to start the server using Next.js's start script
-CMD ["pnpm", "start"]
+CMD pnpm dev
